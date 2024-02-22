@@ -9,3 +9,7 @@ kedro-datasets
 kedro-telemetry
 kedro-viz
 sqlglot<20.11
+
+#new stuf
+pyvis
+networkx
