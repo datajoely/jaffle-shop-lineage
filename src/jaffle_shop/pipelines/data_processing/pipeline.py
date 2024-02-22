@@ -14,7 +14,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=process_orders,
                 inputs=["stg_orders", "stg_payments", "params:payment_methods"],
-                outputs=["orders", "temp_orders"]
+                outputs=["orders", "temp_orders"],
             ),
         ]
     )
