@@ -126,17 +126,11 @@ def kedro_pipeline_to_graph(pipeline, catalog):
 
 
 def generate_random_color(seed):
-    # Set a seed for reproducibility
     random.seed(seed)
-
-    # Generate random RGB values
     r = random.randint(0, 255)
     g = random.randint(0, 255)
     b = random.randint(0, 255)
-
-    # Format the RGB values into a hex color code
     color_code = "#{:02x}{:02x}{:02x}".format(r, g, b)
-
     return color_code
 
 
@@ -160,8 +154,8 @@ def render_nx_graph(
         if label_attr:
             label_value = nx_graph.nodes[node].get(label_attr)
         else:
-            if '->' in node:
-                label_value = 'fx('+ node.split('(')[0] + ')'
+            if "->" in node:
+                label_value = "fx(" + node.split("(")[0] + ")"
             else:
                 label_value = node
 
@@ -188,16 +182,23 @@ def render_kedro_node(node, catalog):
             }
         )
 
-        ibis_output_graphs = {output : ibis_expr_to_graph(g) for output, g in node_outputs.items()}
+        ibis_output_graphs = {
+            output: ibis_expr_to_graph(g) for output, g in node_outputs.items()
+        }
 
-        last_toposort = {output: list(nx.topological_generations(g))[-1] for output, g in ibis_output_graphs.items()}
+        last_toposort = {
+            output: list(nx.topological_generations(g))[-1]
+            for output, g in ibis_output_graphs.items()
+        }
 
         nx_ibis_graphs = nx.compose_all(
             [ibis_expr_to_graph(v) for v in node_outputs.values()]
         )
 
         for output_name, node_id in last_toposort.items():
-            nx_ibis_graphs.add_node(output_name, operation_name="free_output", data_name=output_name)
+            nx_ibis_graphs.add_node(
+                output_name, operation_name="free_output", data_name=output_name
+            )
             nx_ibis_graphs.add_edge(node_id[0], output_name)
 
         return render_nx_graph(
