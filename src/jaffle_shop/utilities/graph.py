@@ -12,7 +12,7 @@ from pyvis.network import Network
 from jaffle_shop.utilities.context import all_logging_disabled
 
 
-def get_type(node):
+def _get_type(node):
     with contextlib.suppress(AttributeError, NotImplementedError):
         return escape(str(node.dtype))
 
@@ -43,8 +43,8 @@ def get_type(node):
     return dict(zip(schema.names, schema.types))
 
 
-def get_data(node):
-    typename = get_type(node)  # Already an escaped string
+def _get_data(node):
+    typename = _get_type(node)  # Already an escaped string
     name = type(node).__name__
     nodename = (
         node.name
@@ -60,11 +60,11 @@ def get_data(node):
         )
         else None
     )
-    data = {"data_name": nodename, "operation_name": name, "types": typename}
+    data = dict(color_category=name, description=nodename, label=name, types=typename)
     return data
 
 
-def ibis_expr_to_graph(expr):
+def _ibis_expr_to_graph(expr):
     graph = Graph.from_bfs(expr.op())
     g = nx.DiGraph()
 
@@ -72,14 +72,14 @@ def ibis_expr_to_graph(expr):
     edges = set()
 
     for v, us in graph.items():
-        v_data = get_data(v)
+        v_data = _get_data(v)
         vhash = str(hash(v))
         if v not in seen_nodes:
             g.add_node(vhash, **v_data)
             seen_nodes.add(v)
 
         for u in us:
-            u_data = get_data(u)
+            u_data = _get_data(u)
             uhash = str(hash(u))
             if u not in seen_nodes:
                 g.add_node(uhash, **u_data)
@@ -112,11 +112,19 @@ def kedro_pipeline_to_graph(pipeline, catalog):
             dataset_type = "MemoryDataset"
 
         kedro_graph.add_node(
-            dataset_name, name=dataset_name, obj=dataset_type, attr_type="dataset"
+            dataset_name,
+            color_category="dataset",
+            description=dataset_type,
+            label=dataset_name,
         )
 
     for task in pipeline.nodes:
-        kedro_graph.add_node(task.name, attr_type="task")  # , kedro_node=task
+        kedro_graph.add_node(
+            task.name,
+            color_category="task",
+            description=task.name,
+            label=task.name.split("(")[0],
+        )
         for input_data in task.inputs:
             kedro_graph.add_edge(input_data, task.name)
         for output_data in task.outputs:
@@ -125,7 +133,7 @@ def kedro_pipeline_to_graph(pipeline, catalog):
     return kedro_graph
 
 
-def generate_random_color(seed):
+def _generate_random_color(seed):
     random.seed(seed)
     r = random.randint(0, 255)
     g = random.randint(0, 255)
@@ -134,9 +142,7 @@ def generate_random_color(seed):
     return color_code
 
 
-def render_nx_graph(
-    nx_graph, notebook=True, color_field=None, label_attr=None, title_attr=None
-):
+def render_nx_graph(nx_graph, notebook=True):
     nt = Network(
         notebook=notebook,
         cdn_resources="in_line",
@@ -144,26 +150,11 @@ def render_nx_graph(
 
     # Add nodes to Pyvis Network and color them based on degree
     for node in nx_graph.nodes:
-        if color_field:
-            attr_color = generate_random_color(
-                nx_graph.nodes[node].get(color_field, "unknown")
-            )
-        else:
-            attr_color = "#97c2fc"
-
-        if label_attr:
-            label_value = nx_graph.nodes[node].get(label_attr)
-        else:
-            if "->" in node:
-                label_value = "fx(" + node.split("(")[0] + ")"
-            else:
-                label_value = node
-
-        if title_attr:
-            title_value = nx_graph.nodes[node].get(title_attr)
-        else:
-            title_value = "data"
-
+        attr_color = _generate_random_color(
+            nx_graph.nodes[node].get("color_category", "unknown")
+        )
+        label_value = nx_graph.nodes[node].get("label")
+        title_value = nx_graph.nodes[node].get("description")
         nt.add_node(node, label=label_value, color=attr_color, title=title_value)
 
     # Add edges to Pyvis Network
@@ -173,7 +164,7 @@ def render_nx_graph(
     return nt
 
 
-def render_kedro_node(node, catalog):
+def kedro_node_to_graph(node, catalog):
     with all_logging_disabled():
         node_outputs = node.run(
             {
@@ -183,7 +174,7 @@ def render_kedro_node(node, catalog):
         )
 
         ibis_output_graphs = {
-            output: ibis_expr_to_graph(g) for output, g in node_outputs.items()
+            output: _ibis_expr_to_graph(g) for output, g in node_outputs.items()
         }
 
         last_toposort = {
@@ -191,19 +182,9 @@ def render_kedro_node(node, catalog):
             for output, g in ibis_output_graphs.items()
         }
 
-        nx_ibis_graphs = nx.compose_all(
-            [ibis_expr_to_graph(v) for v in node_outputs.values()]
-        )
+        nx_ibis_graphs = nx.compose_all(ibis_output_graphs.values())
 
         for output_name, node_id in last_toposort.items():
-            nx_ibis_graphs.add_node(
-                output_name, operation_name="free_output", data_name=output_name
-            )
-            nx_ibis_graphs.add_edge(node_id[0], output_name)
+            nx_ibis_graphs.nodes[node_id[0]]["data_name"] = output_name
 
-        return render_nx_graph(
-            nx_ibis_graphs,
-            color_field="operation_name",
-            label_attr="operation_name",
-            title_attr="data_name",
-        )
+    return nx_ibis_graphs
