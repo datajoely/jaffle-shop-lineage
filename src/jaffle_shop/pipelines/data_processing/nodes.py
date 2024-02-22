@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 
 import ibis
 from ibis import _
@@ -42,7 +42,7 @@ def process_customers(
 
 def process_orders(
     orders: ir.Table, payments: ir.Table, payment_methods: list[str]
-) -> ir.Table:
+) -> Tuple[ir.Table, ir.Table]:
     total_amount_by_payment_method = {}
     for payment_method in payment_methods:
         total_amount_by_payment_method[f"{payment_method}_amount"] = ibis.coalesce(
@@ -66,4 +66,4 @@ def process_orders(
             order_payments.total_amount.name("amount"),
         ]
     ]
-    return final
+    return final, order_payments.sample('50')
