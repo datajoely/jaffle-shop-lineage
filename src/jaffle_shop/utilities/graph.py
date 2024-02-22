@@ -185,6 +185,10 @@ def kedro_node_to_graph(node, catalog):
         nx_ibis_graphs = nx.compose_all(ibis_output_graphs.values())
 
         for output_name, node_id in last_toposort.items():
-            nx_ibis_graphs.nodes[node_id[0]]["data_name"] = output_name
+            working_node = nx_ibis_graphs.nodes[node_id[0]]
+            working_node["description"] = output_name
 
     return nx_ibis_graphs
+
+
+
