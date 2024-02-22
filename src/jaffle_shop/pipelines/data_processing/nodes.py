@@ -66,4 +66,4 @@ def process_orders(
             order_payments.total_amount.name("amount"),
         ]
     ]
-    return final, order_payments.sample("50")
+    return final, order_payments.sample(0.5)

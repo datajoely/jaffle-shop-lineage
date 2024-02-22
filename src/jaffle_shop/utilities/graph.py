@@ -160,7 +160,10 @@ def render_nx_graph(
         if label_attr:
             label_value = nx_graph.nodes[node].get(label_attr)
         else:
-            label_value = node
+            if '->' in node:
+                label_value = 'fx('+ node.split('(')[0] + ')'
+            else:
+                label_value = node
 
         if title_attr:
             title_value = nx_graph.nodes[node].get(title_attr)
@@ -173,7 +176,6 @@ def render_nx_graph(
     for edge in nx_graph.edges():
         nt.add_edge(edge[0], edge[1])
 
-    nt.show("graph.html")
     return nt
 
 
@@ -185,9 +187,18 @@ def render_kedro_node(node, catalog):
                 for x in node.inputs
             }
         )
+
+        ibis_output_graphs = {output : ibis_expr_to_graph(g) for output, g in node_outputs.items()}
+
+        last_toposort = {output: list(nx.topological_generations(g))[-1] for output, g in ibis_output_graphs.items()}
+
         nx_ibis_graphs = nx.compose_all(
             [ibis_expr_to_graph(v) for v in node_outputs.values()]
         )
+
+        for output_name, node_id in last_toposort.items():
+            nx_ibis_graphs.add_node(output_name, operation_name="free_output", data_name=output_name)
+            nx_ibis_graphs.add_edge(node_id[0], output_name)
 
         return render_nx_graph(
             nx_ibis_graphs,
