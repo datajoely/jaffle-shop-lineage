@@ -1,7 +1,6 @@
 import contextlib
 import random
 from html import escape
-import tempfile
 
 import ibis
 import ibis.common.exceptions as com
@@ -167,14 +166,17 @@ def nx_graph_to_pyvis(nx_graph, notebook=True) -> Network:
         )
         label_value = nx_graph.nodes[node].get("label")
         title_value = nx_graph.nodes[node].get("description")
-        shape = "square" if nx_graph.nodes[node].get('kind') == "kedro" else "dot"
-        nt.add_node(node, label=label_value, color=attr_color, title=title_value, shape=shape)
+        shape = "square" if nx_graph.nodes[node].get("kind") == "kedro" else "dot"
+        nt.add_node(
+            node, label=label_value, color=attr_color, title=title_value, shape=shape
+        )
 
     # Add edges to Pyvis Network
     for edge in nx_graph.edges():
         nt.add_edge(edge[0], edge[1])
 
     return nt
+
 
 def kedro_node_ibis_plan(node, catalog):
     with all_logging_disabled():
@@ -189,7 +191,7 @@ def kedro_node_ibis_plan(node, catalog):
             output: _ibis_expr_to_graph(g) for output, g in node_outputs.items()
         }
 
-        # todo we do a head(0) in every execution so need to 
+        # todo we do a head(0) in every execution so need to
         # remove this from the graph artificially
 
         last_toposort = {
@@ -219,7 +221,6 @@ def get_lineage_for_kedro_node(pipe, node, data_catalog):
     combined_graphs = nx.disjoint_union(node_graph, pipeline_graph)
 
     for i in node.inputs:
-        
         kedro_edge = _retrieve_node_by_desc(
             g=combined_graphs, key="unique_key", value=i, kind="kedro"
         )
