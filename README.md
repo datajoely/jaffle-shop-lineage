@@ -2,6 +2,7 @@
 
 - Run `kedro run --pipeline seed`
 - Open [notebooks/lineage_test.ipynb](notebooks/lineage_test.ipynb)
+- See interactive example where the `rename_payments` node has been expanded [here](https://datajoely.github.io/jaffle-shop-lineage/) 
 
 ----
 
