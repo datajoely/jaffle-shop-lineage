@@ -1,6 +1,7 @@
 import contextlib
 import random
 from html import escape
+import tempfile
 
 import ibis
 import ibis.common.exceptions as com
@@ -60,7 +61,14 @@ def _get_data(node):
         )
         else None
     )
-    data = dict(color_category=name, description=nodename, label=name, types=typename)
+    data = dict(
+        color_category=name,
+        description=nodename,
+        label=name,
+        types=typename,
+        unique_key=nodename,
+        kind="ibis",
+    )
     return data
 
 
@@ -116,6 +124,8 @@ def kedro_pipeline_to_graph(pipeline, catalog):
             color_category="dataset",
             description=dataset_type,
             label=dataset_name,
+            unique_key=dataset_name,
+            kind="kedro",
         )
 
     for task in pipeline.nodes:
@@ -124,6 +134,8 @@ def kedro_pipeline_to_graph(pipeline, catalog):
             color_category="task",
             description=task.name,
             label=task.name.split("(")[0],
+            unique_key=task.name.split("(")[0],
+            kind="kedro",
         )
         for input_data in task.inputs:
             kedro_graph.add_edge(input_data, task.name)
@@ -142,7 +154,7 @@ def _generate_random_color(seed):
     return color_code
 
 
-def render_nx_graph(nx_graph, notebook=True):
+def nx_graph_to_pyvis(nx_graph, notebook=True) -> Network:
     nt = Network(
         notebook=notebook,
         cdn_resources="in_line",
@@ -155,7 +167,8 @@ def render_nx_graph(nx_graph, notebook=True):
         )
         label_value = nx_graph.nodes[node].get("label")
         title_value = nx_graph.nodes[node].get("description")
-        nt.add_node(node, label=label_value, color=attr_color, title=title_value)
+        shape = "square" if nx_graph.nodes[node].get('kind') == "kedro" else "dot"
+        nt.add_node(node, label=label_value, color=attr_color, title=title_value, shape=shape)
 
     # Add edges to Pyvis Network
     for edge in nx_graph.edges():
@@ -163,8 +176,7 @@ def render_nx_graph(nx_graph, notebook=True):
 
     return nt
 
-
-def kedro_node_to_graph(node, catalog):
+def kedro_node_ibis_plan(node, catalog):
     with all_logging_disabled():
         node_outputs = node.run(
             {
@@ -177,6 +189,9 @@ def kedro_node_to_graph(node, catalog):
             output: _ibis_expr_to_graph(g) for output, g in node_outputs.items()
         }
 
+        # todo we do a head(0) in every execution so need to 
+        # remove this from the graph artificially
+
         last_toposort = {
             output: list(nx.topological_generations(g))[-1]
             for output, g in ibis_output_graphs.items()
@@ -187,8 +202,39 @@ def kedro_node_to_graph(node, catalog):
         for output_name, node_id in last_toposort.items():
             working_node = nx_ibis_graphs.nodes[node_id[0]]
             working_node["description"] = output_name
+            working_node["unique_key"] = output_name
+            working_node["kind"] = "ibis"
 
     return nx_ibis_graphs
 
 
+def get_lineage_for_kedro_node(pipe, node, data_catalog):
+    def _retrieve_node_by_desc(g, key, value, kind):
+        for i, n in g.nodes(data=True):
+            if n.get(key) == value and n.get("kind") == kind:
+                return i
 
+    pipeline_graph = kedro_pipeline_to_graph(pipe, data_catalog)
+    node_graph = kedro_node_ibis_plan(node, data_catalog)
+    combined_graphs = nx.disjoint_union(node_graph, pipeline_graph)
+
+    for i in node.inputs:
+        
+        kedro_edge = _retrieve_node_by_desc(
+            g=combined_graphs, key="unique_key", value=i, kind="kedro"
+        )
+        ibis_edge = _retrieve_node_by_desc(
+            g=combined_graphs, key="unique_key", value=i, kind="ibis"
+        )
+        combined_graphs.add_edge(kedro_edge, ibis_edge, width=10)
+
+    for o in node.outputs:
+        kedro_edge = _retrieve_node_by_desc(
+            g=combined_graphs, key="unique_key", value=o, kind="kedro"
+        )
+        ibis_edge = _retrieve_node_by_desc(
+            g=combined_graphs, key="unique_key", value=o, kind="ibis"
+        )
+        combined_graphs.add_edge(ibis_edge, kedro_edge, width=10)
+
+    return combined_graphs
