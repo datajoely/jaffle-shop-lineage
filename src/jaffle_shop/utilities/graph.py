@@ -221,21 +221,23 @@ def get_lineage_for_kedro_node(pipe, node, data_catalog):
     combined_graphs = nx.disjoint_union(node_graph, pipeline_graph)
 
     for i in node.inputs:
-        kedro_edge = _retrieve_node_by_desc(
-            g=combined_graphs, key="unique_key", value=i, kind="kedro"
-        )
-        ibis_edge = _retrieve_node_by_desc(
-            g=combined_graphs, key="unique_key", value=i, kind="ibis"
-        )
-        combined_graphs.add_edge(kedro_edge, ibis_edge, width=10)
+        if "params:" not in i :
+            kedro_edge = _retrieve_node_by_desc(
+                g=combined_graphs, key="unique_key", value=i, kind="kedro"
+            )
+            ibis_edge = _retrieve_node_by_desc(
+                g=combined_graphs, key="unique_key", value=i, kind="ibis"
+            )
+            combined_graphs.add_edge(kedro_edge, ibis_edge, width=10)
 
     for o in node.outputs:
-        kedro_edge = _retrieve_node_by_desc(
-            g=combined_graphs, key="unique_key", value=o, kind="kedro"
-        )
-        ibis_edge = _retrieve_node_by_desc(
-            g=combined_graphs, key="unique_key", value=o, kind="ibis"
-        )
-        combined_graphs.add_edge(ibis_edge, kedro_edge, width=10)
+        if "params:" not in i :
+            kedro_edge = _retrieve_node_by_desc(
+                g=combined_graphs, key="unique_key", value=o, kind="kedro"
+            )
+            ibis_edge = _retrieve_node_by_desc(
+                g=combined_graphs, key="unique_key", value=o, kind="ibis"
+            )
+            combined_graphs.add_edge(ibis_edge, kedro_edge, width=10)
 
     return combined_graphs
